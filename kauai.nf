@@ -62,7 +62,7 @@ process genMapMap {
 	
 	"""
 	${params.bin}genmap map -K 30 -E 2 -T ${gm_threads} -I ${refseq.simpleName}_index/ -O ${refseq.simpleName}_genmap -b
-	filterGM.rb ${refseq.simpleName}_genmap.bed 1.0 exclude > ${refseq.simpleName}_genmap.1.0.bed
+	${params.bin}filterGM.rb ${refseq.simpleName}_genmap.bed 1.0 exclude > ${refseq.simpleName}_genmap.1.0.bed
 	"""
 }
 
@@ -428,7 +428,7 @@ process mergedFlagStats {
 	file "${mrkdupbam.simpleName}.stats.txt"
 	
 	"""
-	samtools flagstat -@ ${samtools_extra_threads} ${mrkdupbam} > ${mrkdupbam.simpleName}.stats.txt
+	${params.bin}samtools flagstat -@ ${samtools_extra_threads} ${mrkdupbam} > ${mrkdupbam.simpleName}.stats.txt
 	"""
 
 }
@@ -450,14 +450,13 @@ process jointcallVariants {
 	path genome_fai from fai_refseq_laln_ch
 	
 	output:
-	file "${species}_genomic_variants.raw.vcf.gz"
+	file "${species}_genomic_variants.raw.vcf.gz" into nuVar_ch
 	
 	"""
-	bcftools mpileup -a AD,DP -f $genome -q 20 -Q 20 *.bam | bcftools call -m -v -Oz -o ${species}_genomic_variants.raw.vcf.gz
+	${params.bin}bcftools mpileup -a AD,DP -f $genome -q 20 -Q 20 *.bam | ${params.bin}bcftools call -m -v -Oz -o ${species}_genomic_variants.raw.vcf.gz
 	"""
 
 }
-
 
 process jointcallmtVariants {
 
@@ -474,113 +473,50 @@ process jointcallmtVariants {
 	file "${species}_mt_variants.raw.vcf.gz"
 	
 	"""
-	bcftools mpileup -a AD,DP -f $mtDNA -q 20 -Q 20 *.bam | bcftools call --ploidy 1 -m -v -Oz -o ${species}_mt_variants.raw.vcf.gz
+	${params.bin}bcftools mpileup -a AD,DP -f $mtDNA -q 20 -Q 20 *.bam | ${params.bin}bcftools call --ploidy 1 -m -v -Oz -o ${species}_mt_variants.raw.vcf.gz
 	"""
 
 }
 	
+process filternuVar {
 
-/* PROBABLY USING SAMTOOLS HERE ON OUT
-
-process callVariants {
-
-	// Call variants using GATK HaplotypeCaller
+	// Filter nuclear variants using VCFtools
 	
-	publishDir "$params.outdir/IndividualgVCFs", mode: 'copy'
+	publishDir "$params.outdir/FiltVCFs", mode: 'copy'
 	
 	input:
-	file final_bam from final_bam_ch
-	val java_options from params.java_options
-	path mtDNA from params.mtDNA
-	path mtDNA_fai from fai_mtDNA_laln_ch
-	path genome from params.refseq
-	path genome_fai from fai_refseq_laln_ch
+	path raw_vcf from nuVar_ch
 	
 	output:
-	file "${final_bam.simpleName}.vcf.gz" into gVCF_ch
-	file "${final_bam.simpleName}.vcf.gz.tbi" into gVCF_index_ch
-	
-	script:
-	// Split autosome alignments from mt alignments
-	if (final_bam.simpleName.split('_vs_')[1] == "mt")
-		"""
-		samtools index $final_bam
-		java ${java_options} -jar ${params.bin}gatk.jar HaplotypeCaller -R ${mtDNA} -ploidy 1 -I $final_bam -O ${final_bam.simpleName}.vcf.gz -ERC GVCF -G StandardAnnotation -G AS_StandardAnnotation
-		"""
-	else
-		"""
-		samtools index $final_bam
-		java ${java_options} -jar ${params.bin}gatk.jar HaplotypeCaller -R ${genome} -I $final_bam -O ${final_bam.simpleName}.vcf.gz -ERC GVCF -G StandardAnnotation -G AS_StandardAnnotation
-		"""
-
-}
-
-process consolidategVCFs {
-
-	// Produce datastore using GATK GenomicsDBImport
-	
-	publishDir "$params.outdir/gVCF_database", mode: 'copy'
-	
-	input:
-	file gVCF from gVCF_ch.collect()
-	file gVCF_index from gVCF_index_ch.collect()
-	path mtDNA from params.mtDNA
-	path refseq from params.refseq
-	val java_options from params.java_options
-	
-	output:
-	path "*gVCF_database.tgz" into gVCF_db_ch
-		
-	script:
-	mtgVCF = ""
-	genomegVCF = ""
-	for (i in gVCF) {
-		category = i.simpleName.split("_vs_")[1]
-		if (category == "mt")
-			mtgVCF = mtgVCF + " -V " + i
-		else
-			genomegVCF = genomegVCF + " -V " + i
-	}
-	if (mtgVCF != "")
-		"""
-		grep '>' $mtDNA > mtDNA_interval.list; sed -i 's/>//g' mtDNA_interval.list
-		java ${java_options} -jar ${params.bin}gatk.jar GenomicsDBImport $mtgVCF --genomicsdb-workspace-path mtgVCF_database --tmp-dir ${params.gatk_tmpdir} -L mtDNA_interval.list
-		tar czvf mtgVCF_database.tgz mtgVCF_database/*
-		"""
-	if (genomegVCF != "")
-		"""
-		grep '>' $refseq > genome_interval.list; sed -i 's/>//g' genome_interval.list
-		java ${java_options} -jar ${params.bin}gatk.jar GenomicsDBImport $genomegVCF --genomicsdb-workspace-path genomegVCF_database --tmp-dir ${params.gatk_tmpdir} -L genome_interval.list
-		tar czvf genomegVCF_database.tgz genomegVCF_database/*
-		"""
-
-}
-
-process jointGenotypegVCFs {
-
-	// Initial joint-genotyping pass using GATK GenotypeGVCFs
-	
-	input:
-	path gVCF_db from gVCF_db_ch
-	path mtDNA from params.mtDNA
-	path mtDNA_fai from fai_mtDNA_laln_ch
-	path refseq from params.refseq
-	path genome_fai from fai_refseq_laln_ch
-	val java_options from params.java_options
-	
-	output:
-	file "*joint.vcf.gz" into joint_vcf_ch
+	file "${raw_vcf.simpleName}.filt.recode.vcf.gz" into nuVar_filt_ch
+	file "${raw_vcf.simpleName}.filt.*"
 	
 	"""
-	tar xvfz $gVCF_db
-	if [ -d genomegVCF_database ]; then
-		java ${java_options} -jar ${params.bin}gatk.jar GenotypeGVCFs -R $refseq -V gendb://genomegVCF_database -O genome_joint.vcf.gz --sample-ploidy 2
-		rm -r genomegVCF_database
-	else
-		java ${java_options} -jar ${params.bin}gatk.jar GenotypeGVCFs -R $mtDNA -V gendb://mtgVCF_database -O mt_joint.vcf.gz --sample-ploidy 1
-		rm -r mtgVCF_database
-	fi
+	${params.bin}vcftools --gzvcf $raw_vcf --out ${raw_vcf.simpleName}.filt --minDP5 --max-missing 1 --min-alleles 2 --max-alleles 2 --maf 0.01 --remove-indels --recode
+	${params.bin}vcftools --vcf ${raw_vcf.simpleName}.filt.recode.vcf --het --out ${raw_vcf.simpleName}.filt
+	${params.bin}vcftools --vcf ${raw_vcf.simpleName}.filt.recode.vcf --het --depth ${raw_vcf.simpleName}.filt
+	gzip ${raw_vcf.simpleName}.filt.recode.vcf
 	"""
 
 }
-*/
+
+process mapfilternuVar {
+	
+	// Filter nuclear variants in regions of low mappability using BEDtools
+	
+	publishDir "$params.outdir/GenMapVCFs", mode: 'copy'
+	
+	input:
+	path filt_vcf from nuVar_filt_ch
+	path gm_bed from genmap_ch
+	
+	output:
+	file "${filt_vcf.simpleName}.gm.recode.vcf.gz" into nuVar_gm_ch
+	file "${filt_vcf.simpleName}.gm.*"
+	
+	"""
+	${params.bin}bedtools intersect -a $filt_vcf -b $genmap_ch -v -header > ${filt_vcf.simpleName}.gm.recode.vcf
+	gzip ${filt_vcf.simpleName}.gm.recode.vcf
+	"""
+	
+}
