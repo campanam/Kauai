@@ -492,9 +492,9 @@ process filternuVar {
 	file "${raw_vcf.simpleName}.filt.*"
 	
 	"""
-	${params.bin}vcftools --gzvcf $raw_vcf --out ${raw_vcf.simpleName}.filt --minDP5 --max-missing 1 --min-alleles 2 --max-alleles 2 --maf 0.01 --remove-indels --recode
+	${params.bin}vcftools --gzvcf $raw_vcf --out ${raw_vcf.simpleName}.filt --minDP 5 --max-missing 1 --min-alleles 2 --max-alleles 2 --maf 0.01 --remove-indels --recode
 	${params.bin}vcftools --vcf ${raw_vcf.simpleName}.filt.recode.vcf --het --out ${raw_vcf.simpleName}.filt
-	${params.bin}vcftools --vcf ${raw_vcf.simpleName}.filt.recode.vcf --het --depth ${raw_vcf.simpleName}.filt
+	${params.bin}vcftools --vcf ${raw_vcf.simpleName}.filt.recode.vcf --depth --out ${raw_vcf.simpleName}.filt
 	gzip ${raw_vcf.simpleName}.filt.recode.vcf
 	"""
 
