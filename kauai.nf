@@ -516,6 +516,8 @@ process mapfilternuVar {
 	
 	"""
 	${params.bin}bedtools intersect -a $filt_vcf -b $gm_bed -v -header > ${filt_vcf.simpleName}.gm.recode.vcf
+	${params.bin}vcftools --vcf ${filt_vcf.simpleName}.gm.recode.vcf --het --out ${filt_vcf.simpleName}.gm
+	${params.bin}vcftools --vcf ${filt_vcf.simpleName}.gm.recode.vcf --depth --out ${filt_vcf.simpleName}.gm
 	gzip ${filt_vcf.simpleName}.gm.recode.vcf
 	"""
 	
