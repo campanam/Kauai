@@ -242,7 +242,7 @@ process markDup {
 
 	// Initial marking of duplicates for unmerged library files
 	
-	publishDir "$params.outdir/LibraryBAMs", mode: 'copy'
+	publishDir "$params.outdir/01_LibraryBAMs", mode: 'copy'
 	
 	input:
 	tuple path(lalnbam), val(sample), val(species) from laln_bam_ch
@@ -261,7 +261,7 @@ process flagStats {
 
 	// Calculate alignment statistics for unmerged library files using SAMtools flagstat
 	
-	publishDir "$params.outdir/LibraryFlagStats", mode: 'copy', pattern: '*.stats.txt'
+	publishDir "$params.outdir/02_LibraryFlagStats", mode: 'copy', pattern: '*.stats.txt'
 	
 	input:
 	tuple path(mrkdupbam), val(sample), val(species) from mrkdup_bam_ch
@@ -395,7 +395,7 @@ process mergedMarkDup {
 
 	// Mark duplicates for merged libraries after merging using Picard MarkDuplicates
 	
-	publishDir "$params.outdir/FinalBAMs", mode: 'copy'
+	publishDir "$params.outdir/03_FinalBAMs", mode: 'copy'
 	
 	input:
 	tuple path(laln_mrg_bam), val(species) from laln_merged_bam_ch
@@ -418,7 +418,7 @@ process mergedFlagStats {
 
 	// Calculate alignment statistics using SAMtools flagstat
 	
-	publishDir "$params.outdir/FinalFlagStats", mode: 'copy'
+	publishDir "$params.outdir/04_FinalFlagStats", mode: 'copy'
 	
 	input:
 	file(mrkdupbam) from mrg_mrkdup_bam_ch
@@ -442,7 +442,7 @@ process jointcallVariants {
 
 	// Joint call genomic variants using BCFtools mpileup/call
 	
-	publishDir "$params.outdir/RawVCFs", mode: 'copy'
+	publishDir "$params.outdir/05_RawVCFs", mode: 'copy'
 	
 	input:
 	tuple path(final_bam), val(species) from final_species_ch
@@ -458,11 +458,12 @@ process jointcallVariants {
 
 }
 
-process jointcallmtVariants {
+process jointcallmtHaplotypes {
 
-	// Joint call mitogenomic variants using BCFtools mpileup/call
+	// Joint call mitogenomic haplotypes using BCFtools mpileup/call and vcf2aln
+	// Requires minimum allele depth of 3 to be included in alignment
 	
-	publishDir "$params.outdir/RawVCFs", mode: 'copy'
+	publishDir "$params.outdir/06_MtHaplotypes", mode: 'copy'
 	
 	input:
 	tuple path(final_bam), val(species) from final_mtspecies_ch
@@ -470,10 +471,11 @@ process jointcallmtVariants {
 	path mtDNA_fai from fai_mtDNA_laln_ch
 	
 	output:
-	file "${species}_mt_variants.raw.vcf.gz"
+	file "${species}_mt_*.fa.gz"
 	
 	"""
-	${params.bin}bcftools mpileup -a AD,DP -f $mtDNA -q 20 -Q 20 *.bam | ${params.bin}bcftools call --ploidy 1 -m -v -Oz -o ${species}_mt_variants.raw.vcf.gz
+	${params.bin}bcftools mpileup -a AD,DP -f $mtDNA -q 20 -Q 20 *.bam | ${params.bin}bcftools call --ploidy 1 -m Ov | $params.bin}vcf2aln.rb --pipe -A 3 -N -o ${species}_mt
+	gzip ${species}_mt_*.fa
 	"""
 
 }
@@ -482,7 +484,7 @@ process filternuVar {
 
 	// Filter nuclear variants using VCFtools
 	
-	publishDir "$params.outdir/FiltVCFs", mode: 'copy'
+	publishDir "$params.outdir/07_FiltVCFs", mode: 'copy'
 	
 	input:
 	path raw_vcf from nuVar_ch
@@ -504,7 +506,7 @@ process mapfilternuVar {
 	
 	// Filter nuclear variants in regions of low mappability using BEDtools
 	
-	publishDir "$params.outdir/GenMapVCFs", mode: 'copy'
+	publishDir "$params.outdir/08_GenMapVCFs", mode: 'copy'
 	
 	input:
 	path filt_vcf from nuVar_filt_ch
