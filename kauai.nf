@@ -474,7 +474,7 @@ process jointcallmtHaplotypes {
 	file "${species}_mt_*.fa.gz"
 	
 	"""
-	${params.bin}bcftools mpileup -a AD,DP -f $mtDNA -q 20 -Q 20 *.bam | ${params.bin}bcftools call --ploidy 1 -m Ov | ${params.bin}vcf2aln.rb --pipe -A 3 -N -o ${species}_mt
+	${params.bin}bcftools mpileup -a AD,DP -f $mtDNA -q 20 -Q 20 *.bam | ${params.bin}bcftools call --ploidy 1 -m -Ov | ${params.bin}vcf2aln.rb --pipe -A 3 -N -o ${species}_mt
 	gzip ${species}_mt_*.fa
 	"""
 
