@@ -11,4 +11,4 @@ To cite this pipeline:
 Campana MG, Venkatraman M, Masuda B, Crampton LH, Fleischer RC. 2022. Kauai Honeycreepers Analysis Pipeline version 0.1.0. *Final Technical Report for 'Analysis of Akikiki and Akekee genetics to Manage Captive Flock'*.  
 
 # Funding  
-This project was supported by the United States Fish and Wildlife Service.  
+This project was supported by the United States Fish and Wildlife Service and the Smithsonian Institution.  
